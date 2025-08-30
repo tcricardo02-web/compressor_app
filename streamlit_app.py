@@ -6,10 +6,14 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import io
 
-# Configuração inicial da página
-st.set_page_config(page_title="Aplicativo de Performance de Compressores", layout="wide")
+# Função para garantir que um valor seja numérico
+def ensure_numeric(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
-# Funções auxiliares
+# Função para gerar diagrama do equipamento
 def generate_equipment_diagram():
     """Gera um diagrama simples do equipamento"""
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -22,8 +26,8 @@ def generate_equipment_diagram():
     ax.text(1.25, 2.5, 'COMPRESSOR', ha='center', va='center', fontsize=12, fontweight='bold')
     
     # Tubulação de entrada
-    ax.plot([0, 0.5], [2, 2], 'k-', linewidth=2)
-    ax.plot([0, 0.5], [2.5, 2.5], 'k-', linewidth=2)
+    ax.plot([1.3, 2.5], [2, 2], 'k-', linewidth=2)
+    ax.plot([1.3, 2.5], [2.5, 2.5], 'k-', linewidth=2)
     
     # Tubulação de saída
     ax.plot([2, 2.5], [2, 2], 'k-', linewidth=2)
@@ -46,6 +50,7 @@ def generate_equipment_diagram():
     
     return fig
 
+# Função para gerar PFD do processo
 def generate_pfd():
     """Gera um PFD simplificado do processo"""
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -90,6 +95,7 @@ def generate_pfd():
     
     return fig
 
+# Função para calcular performance do compressor
 def calculate_performance(inlet_press, discharge_press, rpm):
     """Calcula performance do compressor (simulado)"""
     # Cálculo fictício para demonstração
@@ -103,36 +109,7 @@ def calculate_performance(inlet_press, discharge_press, rpm):
         'bhp': bhp
     }
 
-def generate_report(data):
-    """Gera um relatório em formato de texto"""
-    report = f"""
-    RELATÓRIO DE PERFORMANCE DO COMPRESSOR
-    
-    Data: {pd.Timestamp.now().strftime('%d/%m/%Y')}
-    
-    CONFIGURAÇÃO DO EQUIPAMENTO:
-    - Motor: {data['motor_type']}
-    - RPM: {data['rpm']} RPM
-    - Derate: {data['derate']}%
-    - Potência Air Cooler: {data['air_cooler_power']}%
-    
-    AIR COOLER:
-    - Perda de Carga: {data['cooler_pressure_drop']}% por estágio
-    - Temperatura Saída: {data['cooler_temp']}°F por estágio
-    
-    COMPRESSOR:
-    - Stroke: {data['stroke']}
-    - Número de Cilindros: {data['num_cylinders']}
-    
-    RESULTADOS DE PERFORMANCE:
-    - Pressão de Entrada: {data['inlet_press']} {data['pressure_unit']}
-    - Pressão de Descarga: {data['discharge_press']} {data['pressure_unit']}
-    - Vazão Volumétrica: {data['flow_rate']} {data['flow_unit']}
-    - Razão de Pressão: {data['performance']['pressure_ratio']:.2f}
-    - Potência Requerida: {data['performance']['bhp']:.2f} BHP
-    """
-    return report
-
+# Função para gerar relatório em PDF
 def export_to_pdf(report):
     """Exporta o relatório para PDF"""
     buffer = io.BytesIO()
@@ -161,9 +138,26 @@ def export_to_pdf(report):
     buffer.seek(0)
     return buffer
 
-# Interface do Streamlit
+# Função principal do Streamlit
 def main():
-    st.title("Aplicativo de Performance de Compressores")
+    st.set_page_config(page_title="Aplicativo de Performance de Compressores", layout="wide")
+    
+    # Inicializar estado da sessão com valores seguros
+    if 'equipment_data' not in st.session_state:
+        st.session_state.equipment_data = {
+            'motor_type': 'Gás Natural',
+            'rpm': ensure_numeric(st.session_state.equipment_data.get('rpm', 1500)),
+            'derate': ensure_numeric(st.session_state.equipment_data.get('derate', 5)),
+            'air_cooler_power': ensure_numeric(st.session_state.equipment_data.get('air_cooler_power', 4)),
+            'cooler_pressure_drop': ensure_numeric(st.session_state.equipment_data.get('cooler_pressure_drop', 1)),
+            'cooler_temp': ensure_numeric(st.session_state.equipment_data.get('cooler_temp', 120)),
+            'stroke': ensure_numeric(st.session_state.equipment_data.get('stroke', 200)),
+            'num_cylinders': ensure_numeric(st.session_state.equipment_data.get('num_cylinders', 4)),
+            'inlet_press': ensure_numeric(st.session_state.equipment_data.get('inlet_press', 100)),
+            'discharge_press': ensure_numeric(st.session_state.equipment_data.get('discharge_press', 500)),
+            'performance': None,
+            'cylinders': []
+        }
     
     # Abas principais
     tabs = st.tabs([
@@ -174,23 +168,6 @@ def main():
         "Relatório",
         "Multirun"
     ])
-    
-    # Armazenar dados na sessão
-    if 'equipment_data' not in st.session_state:
-        st.session_state.equipment_data = {
-            'motor_type': 'Gás Natural',
-            'rpm': 1500,
-            'derate': 5,
-            'air_cooler_power': 4,
-            'cooler_pressure_drop': 1,
-            'cooler_temp': 120,
-            'stroke': 200,
-            'num_cylinders': 4,
-            'cylinders': [],
-            'inlet_press': 100,
-            'discharge_press': 500,
-            'performance': None
-        }
     
     with tabs[0]:  # Unidades de Medida
         st.header("Configuração de Unidades")
@@ -245,7 +222,7 @@ def main():
                 "RPM:",
                 min_value=500,
                 max_value=3000,
-                value=st.session_state.equipment_data['rpm'],
+                value=ensure_numeric(st.session_state.equipment_data.get('rpm', 1500)),
                 step=100,
                 key="rpm"
             )
@@ -254,7 +231,7 @@ def main():
                 "Derate (%):",
                 min_value=0,
                 max_value=20,
-                value=st.session_state.equipment_data['derate'],
+                value=ensure_numeric(st.session_state.equipment_data.get('derate', 5)),
                 key="derate"
             )
             
@@ -262,7 +239,7 @@ def main():
                 "Potência Air Cooler (%):",
                 min_value=1,
                 max_value=10,
-                value=st.session_state.equipment_data['air_cooler_power'],
+                value=ensure_numeric(st.session_state.equipment_data.get('air_cooler_power', 4)),
                 step=0.5,
                 key="air_cooler_power"
             )
@@ -273,7 +250,7 @@ def main():
                 "Perda de Carga (% por estágio):",
                 min_value=0.1,
                 max_value=5.0,
-                value=st.session_state.equipment_data['cooler_pressure_drop'],
+                value=ensure_numeric(st.session_state.equipment_data.get('cooler_pressure_drop', 1)),
                 step=0.1,
                 key="cooler_pressure_drop"
             )
@@ -282,7 +259,7 @@ def main():
                 "Temperatura Saída (°F por estágio):",
                 min_value=80,
                 max_value=200,
-                value=st.session_state.equipment_data['cooler_temp'],
+                value=ensure_numeric(st.session_state.equipment_data.get('cooler_temp', 120)),
                 step=5,
                 key="cooler_temp"
             )
@@ -295,7 +272,7 @@ def main():
                 "Stroke:",
                 min_value=100,
                 max_value=400,
-                value=st.session_state.equipment_data['stroke'],
+                value=ensure_numeric(st.session_state.equipment_data.get('stroke', 200)),
                 step=10,
                 key="stroke"
             )
@@ -304,7 +281,7 @@ def main():
                 "Número de Cilindros:",
                 min_value=1,
                 max_value=12,
-                value=int(st.session_state.equipment_data['num_cylinders']),
+                value=ensure_numeric(st.session_state.equipment_data.get('num_cylinders', 4)),
                 step=1,
                 key="num_cylinders"
             )
@@ -345,9 +322,9 @@ def main():
             st.subheader("Estimativa de Potência")
             if st.session_state.equipment_data['performance']:
                 st.metric("Potência Requerida (BHP)", 
-                         f"{st.session_state.equipment_data['performance']['bhp']:.2f}")
+                          f"{st.session_state.equipment_data['performance']['bhp']:.2f}")
             else:
-                st.info("Calcule a performance primeiro na aba de cálculo.")
+                st.info("Calcule a performance primeiro para ver a potência.")
     
     with tabs[3]:  # Cálculo de Performance
         st.header("Cálculo de Performance")
@@ -359,7 +336,7 @@ def main():
                 "Pressão de Entrada:",
                 min_value=50,
                 max_value=1000,
-                value=st.session_state.equipment_data['inlet_press'],
+                value=ensure_numeric(st.session_state.equipment_data.get('inlet_press', 100)),
                 step=10,
                 key="inlet_press"
             )
@@ -369,7 +346,7 @@ def main():
                 "Pressão de Descarga:",
                 min_value=inlet_press + 10,
                 max_value=2000,
-                value=st.session_state.equipment_data['discharge_press'],
+                value=ensure_numeric(st.session_state.equipment_data.get('discharge_press', 500)),
                 step=10,
                 key="discharge_press"
             )
@@ -378,7 +355,7 @@ def main():
             performance = calculate_performance(
                 inlet_press, 
                 discharge_press, 
-                st.session_state.equipment_data['rpm']
+                ensure_numeric(st.session_state.equipment_data.get('rpm', 1500))
             )
             st.session_state.equipment_data['performance'] = performance
             st.session_state.equipment_data['inlet_press'] = inlet_press
@@ -435,7 +412,7 @@ def main():
                 "Pressão de Sucção Mínima:",
                 min_value=50,
                 max_value=500,
-                value=100,
+                value=ensure_numeric(st.session_state.equipment_data.get('min_inlet', 100)),
                 step=10,
                 key="min_inlet"
             )
@@ -444,7 +421,7 @@ def main():
                 "Pressão de Sucção Máxima:",
                 min_value=min_inlet + 10,
                 max_value=1000,
-                value=500,
+                value=ensure_numeric(st.session_state.equipment_data.get('max_inlet', 500)),
                 step=10,
                 key="max_inlet"
             )
@@ -454,7 +431,7 @@ def main():
                 "Pressão de Descarga Mínima:",
                 min_value=min_inlet + 10,
                 max_value=1000,
-                value=600,
+                value=ensure_numeric(st.session_state.equipment_data.get('min_discharge', 600)),
                 step=10,
                 key="min_discharge"
             )
@@ -463,7 +440,7 @@ def main():
                 "Pressão de Descarga Máxima:",
                 min_value=min_discharge + 10,
                 max_value=2000,
-                value=1000,
+                value=ensure_numeric(st.session_state.equipment_data.get('max_discharge', 1000)),
                 step=10,
                 key="max_discharge"
             )
@@ -472,7 +449,7 @@ def main():
             "RPM Mínimo:",
             min_value=500,
             max_value=2500,
-            value=1000,
+            value=ensure_numeric(st.session_state.equipment_data.get('min_rpm', 1000)),
             step=100,
             key="min_rpm"
         )
@@ -481,7 +458,7 @@ def main():
             "RPM Máximo:",
             min_value=min_rpm + 100,
             max_value=3000,
-            value=2000,
+            value=ensure_numeric(st.session_state.equipment_data.get('max_rpm', 2000)),
             step=100,
             key="max_rpm"
         )
